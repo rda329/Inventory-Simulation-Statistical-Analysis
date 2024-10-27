@@ -1,0 +1,804 @@
+---
+title: "Inventory Simulation and Statistical Analysis \n"
+author: "Rubiel Aquino"
+date: "`r Sys.Date()`"
+output:
+    word_document:
+    number_sections: true
+---
+
+
+```{r setup, include=FALSE}
+# Implementation function : input strategy 1,2,or 3 . Output list of arrays. Each value in the array is the observation seen in one day. 
+# Observations are collected for the periods 1,4,13, and 52 weeks
+implementation <- function(lambda,starting_inven,delivery_day,order_when_out = NULL,fixed_delivery = NULL, scooters_ordered, delivery_strat = FALSE) {
+  #Periods being sampled converted to days 
+  days_sampled <- c(7,28,91,364)
+  
+  #Initialize arrays where observations will be stored 
+  num_customers_7 <- c()
+  num_sold_7 <- c()
+  num_stock_7 <- c()
+  sale_lost_7 <- c()
+  num_customers_28 <- c()
+  num_sold_28 <- c()
+  num_stock_28 <- c()
+  sale_lost_28 <- c()
+  num_customers_91 <- c()
+  num_sold_91 <- c()
+  num_stock_91 <- c()
+  sale_lost_91 <- c()
+  num_customers_364 <- c()
+  num_sold_364 <- c()
+  num_stock_364 <- c()
+  sale_lost_364 <- c()
+  delivery_counter_7 <- 0
+  delivery_counter_28 <- 0
+  delivery_counter_91 <- 0
+  delivery_counter_364 <- 0
+  #Loop that repeats for each period interval we want to observe
+  for (days in days_sampled) {
+    
+    #delivery_date var stores last time a scooter was delivered
+    delivery_date <- 1
+    delivery_counter <- 0
+    #num_stock array is created for length period, records number of scooters available at the store each day
+    num_stock <- rep(0,days)
+    num_stock[1] <- starting_inven
+    #For loop length period being observed
+    for (i in 1:days) {
+      #Var num_customers stores number of customers that showed up on day i, uses a R.V modeled by a poisson dist.
+      num_customers <- rpois(1,lambda)
+      #Var net_stock stores number of scooters remaining in inventory for day i.
+      net_stock_num <- num_stock[i] - num_customers
+      if (net_stock_num < 0) {
+        #Var num_sold stores number of scooters actually sold
+        num_sold <- num_stock[i]
+        #Var sale_lost stores number of customers lost due to scooter shortage on day i.
+        #Implementation of Strategy 4
+        if (delivery_strat == TRUE) {
+          sale_lost_counter <- 0
+          for (i in 1:(net_stock_num*-1)) {
+            choice_delivery <- rbinom(1,1,.5)
+            if (choice_delivery == 0) {
+              sale_lost_counter <- sale_lost_counter+1 
+              } else if (choice_delivery == 1) {
+                delivery_counter <- delivery_counter + 1 
+              } 
+          }
+          sale_lost <- sale_lost_counter
+          } else {
+          sale_lost <- num_customers - num_stock[i]
+          }
+        } else if (net_stock_num >= 0) {
+        num_sold <- num_customers
+        sale_lost <- 0
+        #This If statement checks how many remaining scooters we have at the end of the day (i) and adds it to the next day's inventory.
+        if ((i+1)<=length(num_stock)) {
+          num_stock[i+1] <- net_stock_num + num_stock[i+1]
+        }
+      }
+      #This if statement checks that if we order a new scooter it wont arrive past the period we're observing.
+      if ((i+delivery_day)<=length(num_stock)){
+        #This If statement checks if there is a fixed schedule delivery for the scooters.
+        #Var fixed_delivery is an parameter given to the funct. it provides the delivery schedule
+        if (fixed_delivery > 0) {
+          if (i%%fixed_delivery == 0){
+            #Every (fixed_delivery) days order (scooters_ordered) amount of scooters.
+            #Scooters will arrive and be stored in the inventory on i+delivery_day (days it takes to deliver scooter) day.
+            num_stock[i+delivery_day] <- num_stock[i+delivery_day] + scooters_ordered
+          }
+        }
+        #This If statement will check if strat. requires you to order a scooter whenever you run out. 
+        #Also will check if inventory has 0 scooters and an order has not already been placed.
+        if (num_stock[i+1]==0 && i>=delivery_date && order_when_out == 1) {
+          num_stock[i+delivery_day] <- num_stock[i+delivery_day]+scooters_ordered
+          #delivery_date var is updated so that you can't order another scooter once you run out until the previous one you ordered arrives.
+          delivery_date <- i+delivery_day
+        } 
+      }
+      #These If statements will append data to array corresponding the interval 
+      if (days == 7) {
+        num_customers_7 <- append(num_customers_7,num_customers)
+        num_sold_7 <- append(num_sold_7,num_sold)
+        num_stock_7 <- num_stock
+        sale_lost_7 <- append(sale_lost_7,sale_lost)
+        delivery_counter_7 <- delivery_counter
+      }
+      if (days == 28) {
+        num_customers_28 <- append(num_customers_28,num_customers)
+        num_sold_28 <- append(num_sold_28,num_sold)
+        num_stock_28 <- num_stock
+        sale_lost_28 <- append(sale_lost_28,sale_lost)
+        delivery_counter_28 <- delivery_counter
+      }
+      if (days == 91) {
+        num_customers_91 <- append(num_customers_91,num_customers)
+        num_sold_91 <- append(num_sold_91,num_sold)
+        num_stock_91 <- num_stock
+        sale_lost_91 <- append(sale_lost_91,sale_lost)
+        delivery_counter_91 <- delivery_counter
+      }
+      if (days == 364) {
+        num_customers_364 <- append(num_customers_364,num_customers)
+        num_sold_364 <- append(num_sold_364,num_sold)
+        num_stock_364 <- num_stock
+        sale_lost_364 <- append(sale_lost_364,sale_lost)
+        delivery_counter_364 <- delivery_counter
+      }
+    }
+  }
+  #Data is compiled into lists for each period of time simulated.
+  week_1 <- list(num_customers = num_customers_7, num_sold = num_sold_7,num_stock = num_stock_7, sale_lost = sale_lost_7,delivery_counter = delivery_counter_7)
+  week_4 <- list(num_customers = num_customers_28, num_sold = num_sold_28, num_stock = num_stock_28, sale_lost = sale_lost_28,delivery_counter = delivery_counter_28)
+  week_13 <- list(num_customers = num_customers_91, num_sold = num_sold_91, num_stock = num_stock_91, sale_lost = sale_lost_91,delivery_counter = delivery_counter_91)
+  week_52 <- list(num_customers = num_customers_364, num_sold = num_sold_364,num_stock = num_stock_364, sale_lost = sale_lost_364,delivery_counter = delivery_counter_364)
+  return(list(week_1=week_1,week_4=week_4,week_13=week_13,week_52=week_52)) 
+}
+
+#raw_data_parser function : input raw data from implementation function, output stats for each observed period.
+raw_data_parser <- function(profit_margin, raw_data, lost_sale_lost,overstock_loss) {
+  data <- vector("list", length(raw_data))
+  #For loop iterates through each period 1,4,13,52 weeks and calculates stats and stores them in list data.
+  for (i in seq_along(raw_data)) {
+    period <- raw_data[[i]]
+    t_deliveries_profit <- period$delivery_counter * 125
+    t_customers = sum(period$num_customers)
+    t_sold = sum(period$num_sold)
+    frac_served = t_sold / t_customers
+    t_sale_lost = sum(period$sale_lost)
+    frac_sale_lost = t_sale_lost / t_customers
+    t_overstocked = period$num_stock[length(period$num_stock)] #Number of scooters unsold at the end of X days
+    lost__oppertunity <- t_sale_lost * lost_sale_lost
+    storage_cost <- 0 
+    for (scooters in (period$num_stock)) {
+      storage_cost <- storage_cost + (scooters * overstock_loss)
+    }
+    profit = (t_sold * profit_margin) - lost__oppertunity -  storage_cost + t_deliveries_profit
+    data[[i]] <- list(t_customers = t_customers,t_sold = t_sold,frac_served = frac_served,frac_sale_lost = frac_sale_lost,t_overstocked = t_overstocked,profit = profit)
+  }
+  return(list(week_1 = data[[1]], week_4 = data[[2]], week_13 = data[[3]], week_52 = data[[4]]))
+}
+
+#multiple_sims function : input number of trials, output for each period 1,4,13,52 wks. stats.
+multiple_sims <- function(strat,trials,lambda,starting_inven,delivery_days,scooters_ordered,profit_margin,lost_sale_lost,overstock_loss, N=NULL) {
+  #Initialize array where stats from simulations will be stored
+  #Each value in the array corresponds to stat obtained from 1 simulation of period (1,4,13, or 52 wks).
+  wk1_t_customers <- c()
+  wk1_t_sold <- c()
+  wk1_frac_served <- c()
+  wk1_frac_sale_lost <- c()
+  wk1_t_overstocked <- c()
+  wk1_profit <- c()
+  wk4_t_customers <- c()
+  wk4_t_sold <- c()
+  wk4_frac_served <- c()
+  wk4_frac_sale_lost <- c()
+  wk4_t_overstocked <- c()
+  wk4_profit <- c()
+  wk13_t_customers <- c()
+  wk13_t_sold <- c()
+  wk13_frac_served <- c()
+  wk13_frac_sale_lost <- c()
+  wk13_t_overstocked <- c()
+  wk13_profit <- c()
+  wk52_t_customers <- c()
+  wk52_t_sold <- c()
+  wk52_frac_served <- c()
+  wk52_frac_sale_lost <- c()
+  wk52_t_overstocked <- c()
+  wk52_profit <- c()
+  
+  #Loops for number of total sims.
+  for (i in 1:trials) {
+    #checks which strat. is requested
+    if (strat == 1) {
+      #Gets raw data periods (1,4,13,and 52 weeks)
+      raw_data_strat_1 <- implementation(lambda,starting_inven,delivery_days,order_when_out=1,fixed_delivery=0,scooters_ordered)
+      #Gets stats for periods (1,4,13,and 52 weeks)
+      data <- raw_data_parser(profit_margin,raw_data_strat_1, lost_sale_lost, overstock_loss)
+    } else if (strat == 2) {
+      raw_data_strat_2 <- implementation(lambda,starting_inven,delivery_days,order_when_out=0,fixed_delivery=7,scooters_ordered)
+      data  <- raw_data_parser(profit_margin,raw_data_strat_2, lost_sale_lost, overstock_loss)
+    } else if (strat == 3) {
+      raw_data_strat_3 <- implementation(lambda,starting_inven,delivery_days,order_when_out=1,fixed_delivery=N,scooters_ordered)
+      data <- raw_data_parser(profit_margin,raw_data_strat_3, lost_sale_lost, overstock_loss)
+    } else if (strat == 4) {
+      raw_data_strat_4 <- implementation(lambda,starting_inven,delivery_days,order_when_out=1,fixed_delivery=0,scooters_ordered, delivery_strat = TRUE)
+      data <- raw_data_parser(profit_margin,raw_data_strat_4, lost_sale_lost, overstock_loss)
+    }
+    #stores stats from each simulation in an array
+    wk1_t_customers <- append(wk1_t_customers, data$week_1$t_customers)
+    wk1_t_sold <- append(wk1_t_sold, data$week_1$t_sold)
+    wk1_frac_served <- append(wk1_frac_served, data$week_1$frac_served)
+    wk1_frac_sale_lost <- append(wk1_frac_sale_lost, data$week_1$frac_sale_lost)
+    wk1_t_overstocked <- append(wk1_t_overstocked, data$week_1$t_overstocked)
+    wk1_profit <- append(wk1_profit, data$week_1$profit)
+    
+    wk4_t_customers <- append(wk4_t_customers, data$week_4$t_customers)
+    wk4_t_sold <- append(wk4_t_sold, data$week_4$t_sold)
+    wk4_frac_served <- append(wk4_frac_served, data$week_4$frac_served)
+    wk4_frac_sale_lost <- append(wk4_frac_sale_lost, data$week_4$frac_sale_lost)
+    wk4_t_overstocked <- append(wk4_t_overstocked, data$week_4$t_overstocked)
+    wk4_profit <- append(wk4_profit, data$week_4$profit)
+    
+    wk13_t_customers <- append(wk13_t_customers, data$week_13$t_customers)
+    wk13_t_sold <- append(wk13_t_sold, data$week_13$t_sold)
+    wk13_frac_served <- append(wk13_frac_served, data$week_13$frac_served)
+    wk13_frac_sale_lost <- append(wk13_frac_sale_lost, data$week_13$frac_sale_lost)
+    wk13_t_overstocked <- append(wk13_t_overstocked, data$week_13$t_overstocked)
+    wk13_profit <- append(wk13_profit, data$week_13$profit)
+    
+    wk52_t_customers <- append(wk52_t_customers, data$week_52$t_customers)
+    wk52_t_sold <- append(wk52_t_sold, data$week_52$t_sold)
+    wk52_frac_served <- append(wk52_frac_served, data$week_52$frac_served)
+    wk52_frac_sale_lost <- append(wk52_frac_sale_lost, data$week_52$frac_sale_lost)
+    wk52_t_overstocked <- append(wk52_t_overstocked, data$week_52$t_overstocked)
+    wk52_profit <- append(wk52_profit, data$week_52$profit)
+  }
+  #Returns results from each simulation
+  return(list(
+    wk1_t_customers = wk1_t_customers,
+    wk1_t_sold = wk1_t_sold,
+    wk1_frac_served = wk1_frac_served,
+    wk1_frac_sale_lost = wk1_frac_sale_lost,
+    wk1_t_overstocked = wk1_t_overstocked,
+    wk1_profit = wk1_profit,
+    
+    wk4_t_customers = wk4_t_customers,
+    wk4_t_sold = wk4_t_sold,
+    wk4_frac_served = wk4_frac_served,
+    wk4_frac_sale_lost = wk4_frac_sale_lost,
+    wk4_t_overstocked = wk4_t_overstocked,
+    wk4_profit = wk4_profit,
+    
+    wk13_t_customers = wk13_t_customers,
+    wk13_t_sold = wk13_t_sold,
+    wk13_frac_served = wk13_frac_served,
+    wk13_frac_sale_lost = wk13_frac_sale_lost,
+    wk13_t_overstocked = wk13_t_overstocked,
+    wk13_profit = wk13_profit,
+    
+    wk52_t_customers = wk52_t_customers,
+    wk52_t_sold = wk52_t_sold,
+    wk52_frac_served = wk52_frac_served,
+    wk52_frac_sale_lost = wk52_frac_sale_lost,
+    wk52_t_overstocked = wk52_t_overstocked,
+    wk52_profit = wk52_profit
+  )
+  )
+}
+
+#Function used to calculated min. trials needed to achieve desired CI and 
+#desired error margins
+calc_num_trials<-function(alpha,epsilon) {
+  z_half_alpha =  qnorm((alpha/2))
+  trials <- 0.25*(z_half_alpha/epsilon)**2
+  return (trials)
+}
+
+```
+# Introduction
+The data contained in this report reflects the findings of Monte Carlo Simulations for an inventory problem. The inventory problem can be summarized as follows, a medical supply store sells mobility scooters at $200 profit each. On average the client observed that 1 scooter is sold every week. The scooters each have a daily storage cost of $5 each. In order to maximize profits, 4 unique strategies to order scooters were simulated in this report. Simulations spanned 1,4,13, and 52 weeks.
+
+Strategy 1:
+Order a new scooter each time one is sold. There will never be more than one in stock at a time.
+
+Strategy 2: 
+Order a new scooter once a week, arriving 5 days later. 
+
+Strategy 3:
+Order a new scooter once every N days, where N is larger than 7, and then to also order a new scooter whenever store runs out.
+
+Strategy 4:
+Strategy 1 with an option to ship scooters directly to the customer's home. If a scooter is not available, customers have the option to order one to their home. The store pays $75 for the delivery fee. 
+
+The following assumptions were made when the different strategies were implemented.  
+
+- A scooter will take 5 days to arrive after it was ordered.
+- No new scooters will be ordered while a delivery is pending. Fixed schedule orders will still be placed on schedule regardless of pending orders.
+
+
+
+# Implementation
+
+The code below shows a snapshot of the implementation. The following parameters may be freely adjusted to simulate different scenarios:
+
+- Average number of customers observed per week (Lambda)
+- Number of scooters available at the store on day 1 (starting_inven)
+- Number of days for a scooter to be delivered (delivery_days)
+- Profit made from the sale of a scooter (profit_margin)
+- Estimated cost of losing a sale due to lack of inventory (lost_sale_cost)
+- Cost of storage per scooter per day (overstock_loss)
+- Number of scooters being delivered each time an order is placed (scooters_ordered)  
+
+``` {r}
+alpha <- 0.05 #Significance value
+epsilon <- 0.1 #Error Margins True - Estimator = Epsilon
+trials <- calc_num_trials(alpha,epsilon)
+
+lambda <- (1/7) # Estimates 1 scooter sold every 7 days
+starting_inven <- 1 #How many scooters available day 1
+delivery_days <- 5 #How long to make a delivery
+profit_margin <- 200 
+lost_sale_lost <- 100 #Cost of not making a sale
+overstock_loss <- 5 #Cost of scooter storage per day per scooter
+scooters_ordered <- 1 #How many scooters ordered at once
+N <- 8
+trials <- trials+700 #Adding an additional 700 trials to improve visualization
+if (N<7) {
+  stop("Error: N must be greater than 7")
+}
+strat_1_stats <- multiple_sims(1,trials,lambda,starting_inven,delivery_days,scooters_ordered,profit_margin,lost_sale_lost,overstock_loss,N)
+strat_2_stats <- multiple_sims(2,trials,lambda,starting_inven,delivery_days,scooters_ordered,profit_margin,lost_sale_lost,overstock_loss,N)
+strat_3_stats <- multiple_sims(3,trials,lambda,starting_inven,delivery_days,scooters_ordered,profit_margin,lost_sale_lost,overstock_loss,N)
+strat_4_stats <- multiple_sims(4,trials,lambda,starting_inven,delivery_days,scooters_ordered,profit_margin,lost_sale_lost,overstock_loss,N)
+
+#Assumptions :  
+#5 days for scooter to arrive after ordering for all strategies
+#No new scooter will be ordered until delivery arrives, only one outstanding order when out of scooter. Fixed schedule orders will still be placed on schedule.
+#Assuming allowable bias is +- .01 customer arriving to the store
+```
+
+```{r include =FALSE}
+color_strat1 <- rgb(0/255, 114/255, 178/255, 0.6)  # Blue
+color_strat2 <- rgb(213/255, 94/255, 0/255, 0.6)   # Orange
+color_strat3 <- rgb(0/255, 158/255, 115/255, 0.6)  # Green
+color_strat4 <- rgb(204/255, 121/255, 167/255, 0.6)  # Red
+
+#AI used for best color recommendation
+```
+
+# Data Visualization
+The figures below demonstrate the results obtained from simulations of the strategies. Strategies can be distinguished by color.
+
+```{r echo=FALSE, warning=FALSE}
+library(ggplot2)
+data_combined <- data.frame(
+  profit = c(strat_1_stats$wk1_profit, strat_2_stats$wk1_profit, strat_3_stats$wk1_profit, strat_4_stats$wk1_profit),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+ggplot(data_combined, aes(x = profit, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Profits Week 1", x = "Profit (USD)",y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Week 4 Profits
+data_combined <- data.frame(
+  profit = c(strat_1_stats$wk4_profit, 
+             strat_2_stats$wk4_profit, 
+             strat_3_stats$wk4_profit, 
+             strat_4_stats$wk4_profit),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = profit, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Profits Week 4", x = "Profit (USD)", y = "Frequency") +
+  theme_minimal()
+
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Week 13 Profits
+data_combined <- data.frame(
+  profit = c(strat_1_stats$wk13_profit, 
+             strat_2_stats$wk13_profit, 
+             strat_3_stats$wk13_profit,
+             strat_4_stats$wk13_profit),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = profit, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Profits Week 13", x = "Profit (USD)", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Week 52 Profits
+data_combined <- data.frame(
+  profit = c(strat_1_stats$wk52_profit, 
+             strat_2_stats$wk52_profit, 
+             strat_3_stats$wk52_profit,
+             strat_4_stats$wk52_profit),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+ggplot(data_combined, aes(x = profit, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Profits Week 52", x = "Profit (USD)", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Fraction Served Data
+# Week 1 Fraction Served
+data_combined <- data.frame(
+  fraction_served = c(strat_1_stats$wk1_frac_served, 
+                      strat_2_stats$wk1_frac_served, 
+                      strat_3_stats$wk1_frac_served,
+                      strat_4_stats$wk1_frac_served),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_served, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Served Week 1", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+data_combined <- data.frame(
+  fraction_served = c(strat_1_stats$wk4_frac_served, 
+                      strat_2_stats$wk4_frac_served, 
+                      strat_3_stats$wk4_frac_served, 
+                      strat_4_stats$wk4_frac_served),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_served, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Served Week 4", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Week 13 Fraction Served
+data_combined <- data.frame(
+  fraction_served = c(strat_1_stats$wk13_frac_served, 
+                      strat_2_stats$wk13_frac_served, 
+                      strat_3_stats$wk13_frac_served,
+                      strat_4_stats$wk13_frac_served),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3","Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_served, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Served Week 13", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Week 52 Fraction Served
+data_combined <- data.frame(
+  fraction_served = c(strat_1_stats$wk52_frac_served, 
+                      strat_2_stats$wk52_frac_served, 
+                      strat_3_stats$wk52_frac_served,
+                      strat_4_stats$wk52_frac_served),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_served, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Served Week 52", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Fraction Sales Lost Data
+# Week 1 Fraction Sales Lost
+data_combined <- data.frame(
+  fraction_sale_lost = c(strat_1_stats$wk1_frac_sale_lost, 
+                         strat_2_stats$wk1_frac_sale_lost, 
+                         strat_3_stats$wk1_frac_sale_lost,
+                         strat_4_stats$wk1_frac_sale_lost),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3","Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_sale_lost, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Sale Lost Week 1", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE,warning=FALSE}
+data_combined <- data.frame(
+  fraction_sale_lost = c(strat_1_stats$wk4_frac_sale_lost, 
+                         strat_2_stats$wk4_frac_sale_lost, 
+                         strat_3_stats$wk4_frac_sale_lost,
+                         strat_4_stats$wk4_frac_sale_lost),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3","Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_sale_lost, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Sale Lost Week 4", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+data_combined <- data.frame(
+  fraction_sale_lost = c(strat_1_stats$wk13_frac_sale_lost, 
+                         strat_2_stats$wk13_frac_sale_lost, 
+                         strat_3_stats$wk13_frac_sale_lost,
+                         strat_4_stats$wk13_frac_sale_lost),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_sale_lost, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Sale Lost Week 13", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE,warning=FALSE}
+data_combined <- data.frame(
+  fraction_sale_lost = c(strat_1_stats$wk52_frac_sale_lost, 
+                         strat_2_stats$wk52_frac_sale_lost, 
+                         strat_3_stats$wk52_frac_sale_lost,
+                         strat_4_stats$wk52_frac_sale_lost),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = fraction_sale_lost, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Fraction Sale Lost Week 52", x = "Fraction", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Overstocked Scooters Data
+# Week 1 Overstocked
+data_combined <- data.frame(
+  overstocked_count = c(strat_1_stats$wk1_t_overstocked, 
+                        strat_2_stats$wk1_t_overstocked, 
+                        strat_3_stats$wk1_t_overstocked,
+                        strat_4_stats$wk1_t_overstocked),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3","Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = overstocked_count, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Overstocked Count Week 1", x = "Count", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+# Week 4 Overstocked
+data_combined <- data.frame(
+  overstocked_count = c(strat_1_stats$wk4_t_overstocked, 
+                        strat_2_stats$wk4_t_overstocked, 
+                        strat_3_stats$wk4_t_overstocked,
+                        strat_4_stats$wk4_t_overstocked),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3","Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = overstocked_count, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Overstocked Count Week 4", x = "Count", y = "Frequency") +
+  theme_minimal()
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+data_combined <- data.frame(
+  overstocked_count = c(strat_1_stats$wk13_t_overstocked, 
+                        strat_2_stats$wk13_t_overstocked, 
+                        strat_3_stats$wk13_t_overstocked,
+                        strat_4_stats$wk13_t_overstocked),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = overstocked_count, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Overstocked Count Week 13", x = "Count", y = "Frequency") +
+  theme_minimal()
+```
+
+```{r echo=FALSE, warning=FALSE}
+# Week 52 Overstocked
+data_combined <- data.frame(
+  overstocked_count = c(strat_1_stats$wk52_t_overstocked, 
+                        strat_2_stats$wk52_t_overstocked, 
+                        strat_3_stats$wk52_t_overstocked,
+                        strat_4_stats$wk52_t_overstocked),
+  Strategy = factor(rep(c("Strategy 1", "Strategy 2", "Strategy 3", "Strategy 4"), 
+                        each = trials))  
+)
+
+ggplot(data_combined, aes(x = overstocked_count, fill = Strategy)) +
+  geom_histogram(position = "dodge", bins = 20) +
+  labs(title = "Overstocked Count Week 52", x = "Count", y = "Frequency") +
+  theme_minimal()
+```
+
+```{r echo=FALSE}
+#Box plot strat. 1 vs 2
+boxplot(strat_1_stats$wk1_profit, strat_2_stats$wk1_profit, 
+        names = c("Strategy 1", "Strategy 2"), 
+        main = "Week 1 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat2))
+
+```
+
+``` {r echo = FALSE}
+boxplot(strat_1_stats$wk1_profit, strat_3_stats$wk1_profit, 
+        names = c("Strategy 1", "Strategy 3"), 
+        main = "Week 1 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat3))
+
+```
+
+``` {r echo = FALSE}
+boxplot(strat_1_stats$wk1_profit, strat_4_stats$wk1_profit, 
+        names = c("Strategy 1", "Strategy 4"), 
+        main = "Week 1 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat4))
+```
+
+``` {r echo = FALSE}
+boxplot(strat_1_stats$wk4_profit, strat_2_stats$wk4_profit, 
+        names = c("Strategy 1", "Strategy 2"), 
+        main = "Week 4 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat2))
+
+
+boxplot(strat_1_stats$wk4_profit, strat_3_stats$wk4_profit, 
+        names = c("Strategy 1", "Strategy 3"), 
+        main = "Week 4 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat3))
+
+boxplot(strat_1_stats$wk4_profit, strat_4_stats$wk4_profit, 
+        names = c("Strategy 1", "Strategy 4"), 
+        main = "Week 4 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat4))
+
+```
+
+
+```{r echo=FALSE}
+boxplot(strat_1_stats$wk13_profit, strat_2_stats$wk13_profit, 
+        names = c("Strategy 1", "Strategy 2"), 
+        main = "Week 13 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat2))
+
+
+boxplot(strat_1_stats$wk13_profit, strat_3_stats$wk13_profit, 
+        names = c("Strategy 1", "Strategy 3"), 
+        main = "Week 13 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat3))
+
+
+boxplot(strat_1_stats$wk13_profit, strat_4_stats$wk13_profit, 
+        names = c("Strategy 1", "Strategy 4"), 
+        main = "Week 13 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat4))
+
+
+```
+
+
+```{r echo=FALSE}
+boxplot(strat_1_stats$wk52_profit, strat_2_stats$wk52_profit, 
+        names = c("Strategy 1", "Strategy 2"), 
+        main = "Week 52 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat2))
+
+
+boxplot(strat_1_stats$wk52_profit, strat_3_stats$wk52_profit, 
+        names = c("Strategy 1", "Strategy 3"), 
+        main = "Week 52 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat3))
+
+boxplot(strat_1_stats$wk52_profit, strat_4_stats$wk52_profit, 
+        names = c("Strategy 1", "Strategy 4"), 
+        main = "Week 52 Profits", ylab = "USD", 
+        col = c(color_strat1, color_strat4))
+
+
+```  
+
+# Analysis
+
+For week 52 profits, visual analysis of the box plots comparing strategies revealed that strategy 2 (Median profit - $`r round(median(strat_2_stats$wk52_profit),0)`) produced a median profit similar to the median profit of strategy 1 (Median profit - $`r round(median(strat_1_stats$wk52_profit),0)`). However, for strategy 2, the interquartile range was noticeably larger then that of strategy 1. The whiskers are also noticeably longer for strategy 2 then 1, strategy 2 has a larger range of possible profit values compared to strategy 1. This shows that while the median profits are comparable, strategy 2 is more volatile than 1.   
+
+The box plot for strategy 3 (Median profit - $`r round(median(strat_3_stats$wk52_profit),0)`) showed that the median profit was visually slightly higher than the median profit of strategy 1. Like strategy 2, the interquartile range and whiskers for strategy 3 were noticeably larger than that of strategy 1. While strategy 3 does have a slightly higher median profit, it is more volatile than strategy 1. 
+
+The box plot for strategy 4 (Median profit - $`r round(median(strat_4_stats$wk52_profit),0)`) highlights a noticeably higher median profit value than strategy 1. The box and whiskers of strategy 4 appear to be slightly larger than that of strategy 1. From only visual evidence, it can stated that strategy 4 has a larger median profit level while maintaining similar volatility when compared to strategy 1." 
+
+From the visual analysis above the following hypotheses was formed where  $S_n$: Week 52 average profit for strategy n.  
+   
+Null Hypotheses :  
+$S_1$ = $S_2$  
+$S_1$ = $S_3$  
+$S_1$ = $S_4$  
+
+Alt. Hypotheses :  
+$S_1$ < $S_2$  
+$S_1$ < $S_3$  
+$S_1$ < $S_4$  
+  
+To test these hypotheses independent two sample one tail t-tests were used. A significance value of 5% was used. The tests were independent and not paired because in the implementation of the simulations, each strategy independently simulated customers for the periods of interest. Since the strategies did not share the same customer data, they were treated as independent. Although the number of samples obtained from the simulations was large, a t-test was used instead of a z-test because the true variance of the estimators for each strategy was unknown. In addition profit is being estimated, not a proportion. Finally a one tail test was used because the alternate hypotheses measure if strategy 1 produces less profit than the other strategies. 
+  
+    
+    
+### Test 1: $S_2$ & $S_1$  
+```{r echo=FALSE}
+strategy_1_profit <- strat_1_stats$wk52_profit
+strategy_2_profit <- strat_2_stats$wk52_profit
+t_test_result<-t.test(strategy_2_profit,strategy_1_profit,alternative = "greater")
+t_test_result
+```
+
+```{r include=FALSE}
+mean_S2 <- round(mean(strategy_2_profit), 0)
+mean_S1 <- round(mean(strategy_1_profit), 0)
+median_S2 <- round(median(strategy_2_profit), 0)
+median_S1 <- round(median(strategy_1_profit), 0)
+median_mean_diff_S2 <- round(median_S2 - mean(strategy_2_profit), 0)
+conf_int_lower <- round(t_test_result$conf.int[1], 2)
+mean_diff_estimate <- round(t_test_result$estimate[1] - t_test_result$estimate[2], 2)
+mean_diff_S2_S1 <- round(mean(strategy_2_profit) - mean(strategy_1_profit), 0)
+```
+
+The results for the t-test between $S_2$ and $S_1$ can be seen above. It reveals that $S_2$ and $S_1$ had a mean of ~ `r mean_S2` and ~ `r mean_S1` USD respectively. Strategy 2 has a ~ `r median_mean_diff_S2` USD difference between the median and mean profit. The distribution of $S_2$ profits is skewed left. It can be explained by the many outliers shown on the box plot. The result for the 95% CI (confidence interval) was [ `r conf_int_lower`, Inf). This informs that for the samples taken the difference between strategy 2 and 1 fell in that range 95% of the times. In other words the true average difference in profit will lie in this range with 95% confidence. The mean estimator difference between $S_2$ and $S_1$ was `r  mean_diff_estimate` USD. A p-value of `r t_test_result$p.value` expresses that given a approximately normal distribution where the mean is 0 and the variance is the sum of var($S_2$) and var($S_1$), `r mean_diff_S2_S1` USD or a value more positive can be observed ~ `r t_test_result$p.value*100`% of the time. Given this p-value the original null hypothesis failed to be rejected because p is greater than alpha (0.05). The results of the t-test suggests no significant evidence to prove that strategy 2 outperforms strategy 1.
+  
+### Test 2: $S_3$ & $S_1$   
+```{r echo=FALSE}
+strategy_3_profit <- strat_3_stats$wk52_profit
+t_test2 <- t.test(strategy_3_profit,strategy_1_profit,alternative = "greater")
+t_test2
+```
+
+```{r include=FALSE}
+mean_S3 <- round(mean(strategy_3_profit), 0)
+median_S3 <- round(median(strategy_3_profit), 0)
+median_mean_diff_S3 <- round(median_S3 - mean(strategy_3_profit), 0)
+conf_int_lower <- round(t_test2$conf.int[1], 2)
+mean_diff_estimate <- round(t_test2$estimate[1] - t_test2$estimate[2], 2)
+mean_diff_S3_S1 <- round(mean(strategy_3_profit) - mean(strategy_1_profit), 0)
+```
+
+The results for the t-test between $S_3$ and $S_1$ can be seen above. It reveals that $S_3$ and $S_1$ had a mean of ~ `r mean_S3` and ~ `r mean_S1` USD respectively. Strategy 3 has a ~ `r median_mean_diff_S3` USD difference between the median and mean profit. This can be explained by the outliers shown on the box plot. The difference was less then that of strategy 2, this expresses that strategy 3 is less skewed than 2. The result for the 95% CI was [ `r conf_int_lower`, Inf). This informs that for the samples taken the difference between strategy 3 and 1 fell in that range 95% of the times. In other words the true average difference in profit will lie in this range with 95% confidence. The mean estimator difference between $S_3$ and $S_1$ was `r  mean_diff_estimate` USD. A p-value of `r t_test2$p.value` expresses that given a approximately normal distribution where the mean is 0 and the variance is the sum of var($S_3$) and var($S_1$), `r mean_diff_S3_S1` USD or a value more positive can be observed ~ `r t_test2$p.value*100`% of the time. Given this p-value the original null hypothesis was rejected for the alternative because p is less than alpha (0.05). The results of the t-test suggests evidence to prove that strategy 3 outperforms strategy 1.
+
+### Test 3: $S_4$ & $S_1$  
+```{r echo=FALSE}
+strategy_4_profit <- strat_4_stats$wk52_profit
+t_test3<-t.test(strategy_4_profit,strategy_1_profit,alternative = "greater")
+t_test3
+```
+
+```{r include=FALSE}
+mean_S4 <- round(mean(strategy_4_profit), 0)
+median_S4 <- round(median(strategy_4_profit), 0)
+median_mean_diff_S4 <- round(median_S4 - mean(strategy_4_profit), 0)
+conf_int_lower <- round(t_test3$conf.int[1], 2)
+mean_diff_estimate <- round(t_test3$estimate[1] - t_test3$estimate[2], 2)
+mean_diff_S4_S1 <- round(mean(strategy_4_profit) - mean(strategy_1_profit), 0)
+```
+
+The results for the t-test between $S_4$ and $S_1$ can be seen above. It reveals that $S_4$ and $S_1$ had a mean of ~ `r mean_S4` and ~ `r mean_S1` USD respectively. Strategy 4 has a ~ `r median_mean_diff_S4` USD difference between the median and mean profit. This difference can be attributed to randomness/ noise. The difference was significantly less then that of strategy 2 and 3. The result for the 95% CI was [ `r conf_int_lower`, Inf). This informs that for the samples taken the difference between strategy 4 and 1 fell in that range 95% of the times. In other words the true average difference in profit will lie in this range with 95% confidence. The mean estimator difference between $S_4$ and $S_1$ was `r  mean_diff_estimate` USD. A p-value of ~`r t_test3$p.value` expresses that given a approximately normal distribution where the mean is 0 and the variance is the sum of var($S_4$) and var($S_1$), `r mean_diff_S4_S1` USD or a value more positive can be observed ~ `r t_test3$p.value*100`% of the time. Given this p-value the original null hypothesis was rejected for the alternative because p is less than alpha (0.05). The results of the t-test suggests evidence to prove that strategy 3 outperforms strategy 1. 
+
+# Conclusion
+
+Strategy 2 failed to outperform strategy 1. Strategy 3 and 4 did outperform strategy 1. If the goal is to maximize yearly profits it is recommended to implement strategy 4 which has a larger estimator difference in profit then strategy 3. In addition strategy 4 is less skewed then strategy 3, this means that there are less extreme outliers making this strategy less risky in that sense.
